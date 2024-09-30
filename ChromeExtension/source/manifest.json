@@ -1,45 +1,40 @@
 {
-    "manifest_version": 3,
-    "name": "Spotify Group Shuffle",
-    "version": "1.0",
-    "description": "Ensure grouped songs play in order even when shuffle is enabled.",
-    "permissions": [
-      "identity",
-      "storage",
-      "notifications"
-    ],
-    "background": {
-      "service_worker": "background.js"
-    },
-    "action": {
-      "default_popup": "popup.html",
-      "default_icon": {
-        "16": "icons/icon16.png",
-        "48": "icons/icon48.png",
-        "128": "icons/icon128.png"
-      }
-    },
-    "icons": {
+  "manifest_version": 3,
+  "name": "After Eleanor",
+  "version": "1.0",
+  "description": "Ensure grouped songs play in order even when shuffle is enabled.",
+  "permissions": [
+    "identity",
+    "storage",
+    "notifications"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    },
-    "oauth2": {
-      "client_id": "YOUR_SPOTIFY_CLIENT_ID",
-      "scopes": [
-        "playlist-read-private",
-        "playlist-modify-public",
-        "playlist-modify-private",
-        "streaming",
-        "user-modify-playback-state",
-        "user-read-playback-state"
-      ]
-    },
-    "content_scripts": [
-      {
-        "matches": ["https://open.spotify.com/*"],
-        "js": ["content.js"]
-      }
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "oauth2": {
+    "client_id": "",
+    "scopes": [
+      "playlist-read-private",
+      "playlist-read-collaborative",
+      "playlist-modify-public",
+      "playlist-modify-private",
+      "streaming",
+      "user-modify-playback-state",
+      "user-read-playback-state",
+      "user-read-currently-playing"
     ]
   }
-  
+}

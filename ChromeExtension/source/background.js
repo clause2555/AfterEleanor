@@ -2,51 +2,100 @@
 
 // Spotify API Endpoints
 const SPOTIFY_AUTHORIZE_ENDPOINT = 'https://accounts.spotify.com/authorize';
-const SPOTIFY_TOKEN_ENDPOINT = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
-// Replace with your actual Client ID and Redirect URI
-const CLIENT_ID = 'YOUR_SPOTIFY_CLIENT_ID';
-const REDIRECT_URI = 'YOUR_REDIRECT_URI'; // e.g., 'http://localhost'
+// Replace with your actual Client ID
+const CLIENT_ID = '';
+const REDIRECT_URI = chrome.identity.getRedirectURL(); // Dynamically set Redirect URI
 const SCOPES = [
   'playlist-read-private',
+  'playlist-read-collaborative',
   'playlist-modify-public',
   'playlist-modify-private',
   'streaming',
   'user-modify-playback-state',
   'user-read-playback-state',
+  'user-read-currently-playing'
 ];
 
 // Access Token Management
 let accessToken = '';
 let tokenExpiresAt = 0;
 
-// Initialize the Spotify Web Playback SDK
-let player;
+// Current Playing Track ID
+let currentTrackId = '';
+
+// Polling Interval (in milliseconds)
+const POLLING_INTERVAL = 5000; // 5 seconds
+let pollingIntervalId = null;
+
+// Initialize the extension by authenticating and starting the polling
+(async function initialize() {
+  try {
+    await authenticate();
+    startPolling();
+  } catch (error) {
+    console.error('Initialization error:', error);
+  }
+})();
 
 // Listen for messages from popup.js
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  console.log('Received message:', request.type);
+  
   if (request.type === 'GET_ACCESS_TOKEN') {
     sendResponse({ accessToken: accessToken });
-  } else if (request.type === 'FETCH_PLAYLISTS') {
-    fetchUserPlaylists().then(playlists => sendResponse({ playlists })).catch(err => sendResponse({ error: err }));
+    return true;
+  }
+  
+  if (request.type === 'FETCH_PLAYLISTS') {
+    fetchUserPlaylists()
+      .then(playlists => {
+        console.log('Fetched playlists:', playlists);
+        sendResponse({ playlists });
+      })
+      .catch(err => {
+        console.error('Error fetching playlists:', err);
+        sendResponse({ error: err.message || err });
+      });
     return true; // Indicates that the response is asynchronous
   } else if (request.type === 'FETCH_TRACKS') {
-    fetchPlaylistTracks(request.playlistId).then(tracks => sendResponse({ tracks })).catch(err => sendResponse({ error: err }));
+    fetchPlaylistTracks(request.playlistId)
+      .then(tracks => {
+        console.log('Fetched tracks for playlist:', request.playlistId, tracks);
+        sendResponse({ tracks });
+      })
+      .catch(err => {
+        console.error('Error fetching tracks:', err);
+        sendResponse({ error: err.message || err });
+      });
     return true;
   } else if (request.type === 'SAVE_GROUP') {
-    saveGroup(request.playlistId, request.trackIds).then(() => sendResponse({ success: true })).catch(err => sendResponse({ error: err }));
+    saveGroup(request.playlistId, request.trackIds)
+      .then(() => {
+        console.log('Saved group for playlist:', request.playlistId);
+        sendResponse({ success: true });
+      })
+      .catch(err => {
+        console.error('Error saving group:', err);
+        sendResponse({ error: err.message || err });
+      });
     return true;
   } else if (request.type === 'GET_GROUPS') {
-    getGroups(request.playlistId).then(groups => sendResponse({ groups })).catch(err => sendResponse({ error: err }));
-    return true;
-  } else if (request.type === 'INIT_PLAYER') {
-    initializePlayer().then(() => sendResponse({ success: true })).catch(err => sendResponse({ error: err }));
+    getGroups(request.playlistId)
+      .then(groups => {
+        console.log('Fetched groups for playlist:', request.playlistId, groups);
+        sendResponse({ groups });
+      })
+      .catch(err => {
+        console.error('Error fetching groups:', err);
+        sendResponse({ error: err.message || err });
+      });
     return true;
   }
 });
 
-// Authenticate the user with Spotify
+// Function to authenticate the user and obtain an access token
 async function authenticate() {
   return new Promise((resolve, reject) => {
     const authURL = `${SPOTIFY_AUTHORIZE_ENDPOINT}?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES.join(' '))}&response_type=token&show_dialog=true`;
@@ -58,37 +107,125 @@ async function authenticate() {
       },
       (redirectURL) => {
         if (chrome.runtime.lastError || redirectURL.includes('error')) {
-          reject(chrome.runtime.lastError || new Error('Authentication failed'));
+          const error = chrome.runtime.lastError || new Error('Authentication failed');
+          console.error('Authentication error:', error);
+          reject(error);
           return;
         }
 
-        const params = new URLSearchParams(new URL(redirectURL).hash.substring(1));
-        accessToken = params.get('access_token');
-        const expiresIn = parseInt(params.get('expires_in')); // in seconds
-        tokenExpiresAt = Date.now() + expiresIn * 1000;
+        try {
+          const params = new URLSearchParams(new URL(redirectURL).hash.substring(1));
+          accessToken = params.get('access_token');
+          const expiresIn = parseInt(params.get('expires_in')); // in seconds
+          tokenExpiresAt = Date.now() + expiresIn * 1000;
 
-        resolve(accessToken);
+          console.log('Authentication successful. Access token obtained.');
+          resolve(accessToken);
+        } catch (e) {
+          console.error('Failed to parse authentication response:', e);
+          reject(new Error('Failed to parse authentication response.'));
+        }
       }
     );
   });
 }
 
-// Refresh the access token if expired
+// Function to refresh the access token if expired
 async function getAccessToken() {
-  if (accessToken && Date.now() < tokenExpiresAt) {
+  if (accessToken && Date.now() < tokenExpiresAt - 60000) { // Refresh 1 minute before expiry
     return accessToken;
   } else {
     try {
       await authenticate();
       return accessToken;
     } catch (error) {
-      console.error('Authentication error:', error);
+      console.error('Authentication error:', error.message || error);
       throw error;
     }
   }
 }
 
-// Fetch User Playlists
+// Function to start polling the currently playing track
+function startPolling() {
+  if (pollingIntervalId) {
+    clearInterval(pollingIntervalId);
+  }
+
+  pollingIntervalId = setInterval(async () => {
+    try {
+      const token = await getAccessToken();
+      const currentTrack = await getCurrentPlayingTrack(token);
+      
+      if (currentTrack && currentTrack.item && currentTrack.item.id) {
+        const fetchedTrackId = currentTrack.item.id;
+
+        if (fetchedTrackId !== currentTrackId) {
+          console.log('Detected track change:', fetchedTrackId);
+          currentTrackId = fetchedTrackId;
+          await handleCurrentTrack(fetchedTrackId);
+        }
+      } else {
+        console.log('No track is currently playing.');
+      }
+    } catch (error) {
+      console.error('Error during polling:', error);
+    }
+  }, POLLING_INTERVAL);
+
+  console.log('Started polling for currently playing track every', POLLING_INTERVAL / 1000, 'seconds.');
+}
+
+// Function to fetch the user's currently playing track
+async function getCurrentPlayingTrack(token) {
+  const response = await fetch(`${SPOTIFY_API_BASE}/me/player/currently-playing`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+
+  if (response.status === 204) {
+    // No content, nothing is playing
+    return null;
+  }
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch currently playing track.');
+  }
+
+  const data = await response.json();
+  return data;
+}
+
+// Function to handle the currently playing track
+async function handleCurrentTrack(trackId) {
+  try {
+    const groups = await getAllGroups();
+    const matchedGroup = findGroupContainingTrack(groups, trackId);
+
+    if (matchedGroup && matchedGroup[0] === trackId) {
+      console.log('Track is the first in a group. Enqueuing the rest of the group.');
+      // Enqueue the rest of the group
+      const tracksToEnqueue = matchedGroup.slice(1);
+      for (const id of tracksToEnqueue) {
+        await enqueueTrack(id);
+      }
+
+      // Notify the user
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Spotify Group Shuffle',
+        message: 'A group of songs has been queued to play in order.',
+      });
+    } else {
+      console.log('Track is not part of any group or not the first in a group.');
+    }
+  } catch (error) {
+    console.error('Error handling current track:', error);
+  }
+}
+
+// Function to fetch user playlists
 async function fetchUserPlaylists() {
   const token = await getAccessToken();
   let playlists = [];
@@ -97,12 +234,12 @@ async function fetchUserPlaylists() {
   while (nextURL) {
     const response = await fetch(nextURL, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch playlists');
+      throw new Error('Failed to fetch playlists.');
     }
 
     const data = await response.json();
@@ -113,7 +250,7 @@ async function fetchUserPlaylists() {
   return playlists;
 }
 
-// Fetch Tracks from a Playlist
+// Function to fetch tracks from a playlist
 async function fetchPlaylistTracks(playlistId) {
   const token = await getAccessToken();
   let tracks = [];
@@ -122,23 +259,25 @@ async function fetchPlaylistTracks(playlistId) {
   while (nextURL) {
     const response = await fetch(nextURL, {
       headers: {
-        Authorization: `Bearer ${token}`,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
     if (!response.ok) {
-      throw new Error('Failed to fetch playlist tracks');
+      throw new Error('Failed to fetch playlist tracks.');
     }
 
     const data = await response.json();
-    tracks = tracks.concat(data.items.map(item => item.track));
+    // Map to extract the track object from each item
+    const fetchedTracks = data.items.map(item => item.track).filter(track => track !== null);
+    tracks = tracks.concat(fetchedTracks);
     nextURL = data.next;
   }
 
   return tracks;
 }
 
-// Save a Group of Songs
+// Function to save a group of songs
 async function saveGroup(playlistId, trackIds) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(['groups'], (result) => {
@@ -158,7 +297,7 @@ async function saveGroup(playlistId, trackIds) {
   });
 }
 
-// Get Groups for a Playlist
+// Function to get groups for a playlist
 async function getGroups(playlistId) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(['groups'], (result) => {
@@ -168,122 +307,7 @@ async function getGroups(playlistId) {
   });
 }
 
-// Initialize the Spotify Web Playback SDK
-async function initializePlayer() {
-  await loadSpotifySDK();
-
-  return new Promise((resolve, reject) => {
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      player = new Spotify.Player({
-        name: 'Spotify Group Shuffle Player',
-        getOAuthToken: cb => { cb(accessToken); },
-      });
-
-      // Error Handling
-      player.addListener('initialization_error', ({ message }) => { console.error(message); });
-      player.addListener('authentication_error', ({ message }) => { console.error(message); });
-      player.addListener('account_error', ({ message }) => { console.error(message); });
-      player.addListener('playback_error', ({ message }) => { console.error(message); });
-
-      // Ready
-      player.addListener('ready', ({ device_id }) => {
-        console.log('Ready with Device ID', device_id);
-        resolve();
-      });
-
-      // Not Ready
-      player.addListener('not_ready', ({ device_id }) => {
-        console.log('Device ID has gone offline', device_id);
-      });
-
-      // Playback State Changed
-      player.addListener('player_state_changed', state => {
-        if (!state) {
-          return;
-        }
-
-        const currentTrackId = state.track_window.current_track.id;
-        handleQueueAdjustment(currentTrackId);
-      });
-
-      // Connect to the player!
-      player.connect();
-    };
-  });
-}
-
-// Load Spotify Web Playback SDK
-function loadSpotifySDK() {
-  return new Promise((resolve, reject) => {
-    if (window.Spotify) {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://sdk.scdn.co/spotify-player.js';
-    script.onload = () => {
-      resolve();
-    };
-    script.onerror = () => {
-      reject(new Error('Failed to load Spotify SDK'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
-// Handle Queue Adjustment Based on Grouped Songs
-/*
-async function handleQueueAdjustment(currentTrackId) {
-  try {
-    const groups = await getAllGroups();
-    const matchedGroup = findGroupContainingTrack(groups, currentTrackId);
-
-    if (matchedGroup && matchedGroup[0] === currentTrackId) {
-      // Enqueue the rest of the group
-      const tracksToEnqueue = matchedGroup.slice(1);
-      for (const trackId of tracksToEnqueue) {
-        await enqueueTrack(trackId);
-      }
-
-      // Notify the user
-      chrome.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon.png',
-        title: 'Spotify Group Shuffle',
-        message: 'A group of songs has been queued to play in order.',
-      });
-    }
-  } catch (error) {
-    console.error('Error adjusting queue:', error);
-  }
-}
-  */
-
-async function handleQueueAdjustment(currentTrackId) {
-    chrome.storage.sync.get(['groups'], async (result) => {
-      const groups = result.groups || {};
-      const playlistId = await getCurrentPlaylistId(); // Implement method to get current playlist
-      const playlistGroups = groups[playlistId] || [];
-      
-      for (const group of playlistGroups) {
-        if (group.includes(currentTrackId)) {
-          // Find the position of the current track and enqueue the rest
-          const groupIndex = group.indexOf(currentTrackId);
-          if (groupIndex !== 0) continue; // Only adjust if it's the first in the group
-          
-          const tracksToEnqueue = group.slice(1);
-          for (const trackId of tracksToEnqueue) {
-            await enqueueTrack(trackId); // Implement enqueueTrack using Spotify API
-          }
-          break;
-        }
-      }
-    });
-  }
-  
-
-// Retrieve All Groups
+// Function to get all groups across playlists
 async function getAllGroups() {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.get(['groups'], (result) => {
@@ -298,7 +322,7 @@ async function getAllGroups() {
   });
 }
 
-// Find the group that contains the current track
+// Function to find a group containing the current track
 function findGroupContainingTrack(groups, trackId) {
   for (const group of groups) {
     if (group.includes(trackId)) {
@@ -308,22 +332,59 @@ function findGroupContainingTrack(groups, trackId) {
   return null;
 }
 
-// Enqueue a Track using Spotify API
+// Function to enqueue a track using Spotify Web API
 async function enqueueTrack(trackId) {
   const token = await getAccessToken();
   const response = await fetch(`${SPOTIFY_API_BASE}/me/player/queue?uri=spotify:track:${trackId}`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${token}`,
+      'Authorization': `Bearer ${token}`,
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to enqueue track ${trackId}`);
+    throw new Error(`Failed to enqueue track ${trackId}.`);
+  }
+}
+
+// Function to get grouped songs (for potential future enhancements)
+async function getGroupedSongs() {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.get(['groups'], (result) => {
+      const groups = result.groups || {};
+      // Flatten all groups into a single array of song IDs
+      const groupedSongs = [];
+      for (const playlistId in groups) {
+        groups[playlistId].forEach(group => {
+          groupedSongs.push(...group);
+        });
+      }
+      resolve(groupedSongs);
+    });
+  });
+}
+
+// Function to transfer playback to a specific device (Optional)
+async function transferPlaybackHere(device_id) {
+  const token = await getAccessToken();
+  const response = await fetch(`${SPOTIFY_API_BASE}/me/player`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      device_ids: [device_id],
+      play: true,
+    }),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to transfer playback to the new device.');
   }
 }
 
 // Listen for installation to authenticate
 chrome.runtime.onInstalled.addListener(() => {
-  authenticate().catch(err => console.error('Failed to authenticate on install:', err));
+  authenticate().catch(err => console.error('Failed to authenticate on install:', err.message || err));
 });
