@@ -1,0 +1,29 @@
+<!-- popup.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Spotify Group Shuffle</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <h1>Spotify Group Shuffle</h1>
+  <div id="error-message" class="error" style="display: none;"></div>
+  <div id="playlists">
+    <!-- Playlists will be dynamically loaded here -->
+  </div>
+  <div id="playlist-controls" style="display: none;">
+    <h2 id="playlist-name">Playlist: </h2>
+    <div id="tracks">
+      <!-- Tracks will be dynamically loaded here -->
+    </div>
+    <div id="group-controls" style="display: none;">
+      <button id="create-group-button">Create Group</button>
+    </div>
+    <h3>Existing Groups:</h3>
+    <div id="groups">
+      <!-- Existing groups will be displayed here -->
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

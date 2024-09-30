@@ -1,0 +1,54 @@
+/* styles.css */
+
+body {
+    font-family: Arial, sans-serif;
+    width: 300px;
+    padding: 10px;
+    background-color: #1db954;
+    color: white;
+  }
+  
+  h1 {
+    text-align: center;
+    color: white;
+  }
+  
+  .playlist-item, .track-item, .group-item {
+    padding: 5px;
+    margin: 5px 0;
+    background-color: #282828;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  
+  .playlist-item:hover, .track-item:hover, .group-item:hover {
+    background-color: #3e3e3e;
+  }
+  
+  .selected {
+    background-color: #535353;
+  }
+  
+  #create-group-button {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #1ed760;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: black;
+    font-weight: bold;
+  }
+  
+  #create-group-button:hover {
+    background-color: #1ed760cc;
+  }
+  
+  .error {
+    background-color: #e74c3c;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+  
