@@ -16,6 +16,7 @@ Spotify Group Shuffle is a Chrome extension designed for Spotify users who enjoy
 - [📄 License](#-license)
 - [🙏 Acknowledgments](#-acknowledgments)
 
+
 ## 🎶 About
 
 Spotify's shuffle feature is great for discovering new music, but it can disrupt the intended flow of playlists, especially for genres like jam bands where multiple tracks create a cohesive experience. **After Eleanor** solves this by allowing users to define groups of songs that will always play in sequence, maintaining the integrity of their musical journey even in shuffle mode.
@@ -101,6 +102,14 @@ The name comes from a friend of mine who offered up the idea one morning saying 
     - Chrome Extensions API
     - Spotify Web API
     - HTML/CSS
+2. ***Road Map***
+
+   - Implement as a Firefox browser extension
+   - Work on a universal browser extension
+   - Package and register the extensions
+   - Possibly work on desktop/mobile app extensions
+   - The end goal is to have some service to make these song groupings persist across a users
+     devices, so possibly some sort of web server to handle the requests and settings. TBD.
 
 ### Contributing
 
