@@ -95,9 +95,30 @@ The name comes from a friend of mine who offered up the idea one morning saying 
 
 ### Development
 
-1. **Technologies Used***
+1. ***Technologies Used***
 
     - JavaScript
     - Chrome Extensions API
     - Spotify Web API
     - HTML/CSS
+
+### Contributing
+
+1. ***How to Contribute***
+
+   Any input at all is greatly appreciated. Feel free to make changes, fork the repo, send messages or anything like that.
+   This is my first attempt at making a real world tool in lieu of a video games, so the paradigms are new to me :-).
+
+### License 
+
+1. ***MIT License***
+
+   This tool was developed under the MIT license. See LICENSE.md for more information.
+
+### Acknowledgements 
+
+   I created this tool but I would like to give special thanks to my friend Gavin who tossed the idea to me one morning.
+   As I mentioned before the name After Eleanor comes from a specific song sequence played by the Jerry Garcia Band. 
+   The Sequence is a cover of J.J. Cale's "After Midnight" into The Beatles "Eleanor Rigby" and reprised back into
+   J.J. Cale's "After Midnight".  When he presented the idea for the tool he used this sequence saying "I always have to 
+   queue these songs together when my playlist is shuffled, I wish Spotify would just add this as a feature."
