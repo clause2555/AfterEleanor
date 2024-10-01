@@ -55,7 +55,7 @@ The name comes from a friend of mine who offered up the idea one morning saying 
     - Go to the Spotify Developer Dashboard
     - Click Creat an App and fill in the required information
     - Note down your Client ID and Client Secret
-    - Set the Redirect URI to 'http://localhost' (or your preferred URI)
+    - Currently you will need to skip forward and load the Extension into Chrome so that it errors and logs the temporary Redirect URI that should go into the          SDD.
     - NOTE THIS STEP IS ONLY WHILE THIS IS IN DEVELOPMENT, ONCE COMPLETE THIS WILL BE UNNECESSARY
 
 4. **Configure the Extension**
